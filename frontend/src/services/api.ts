@@ -1,9 +1,8 @@
 /**
  * Centralized API service for all backend calls.
- * Currently mocked - will be replaced with real API calls later.
+ * Connects to FastAPI backend based on OpenAPI specification.
  */
 
-import { v4 as uuidv4 } from 'uuid';
 import type {
   Interview,
   CreateInterviewRequest,
@@ -15,19 +14,160 @@ import type {
   ProgrammingLanguage,
 } from '@/types/interview';
 
-// Mock data store (simulates backend database)
-const mockInterviews: Map<string, Interview> = new Map();
-
-// Simulated network delay
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+// Backend API base URL
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
 /**
- * Clears all mock data (for testing purposes)
+ * Helper function to handle API responses
  */
-export function clearMockData(): void {
-  mockInterviews.clear();
+async function handleResponse<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'An error occurred' }));
+    throw new Error(error.message || `HTTP ${response.status}: ${response.statusText}`);
+  }
+  
+  // Handle 204 No Content
+  if (response.status === 204) {
+    return undefined as T;
+  }
+  
+  return response.json();
 }
 
+/**
+ * Creates a new interview session
+ */
+export async function createInterview(
+  request: CreateInterviewRequest
+): Promise<Interview> {
+  const response = await fetch(`${API_BASE_URL}/interviews`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+
+  return handleResponse<Interview>(response);
+}
+
+/**
+ * Gets an interview by ID
+ */
+export async function getInterview(interviewId: string): Promise<Interview | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/interviews/${interviewId}`);
+    return handleResponse<Interview>(response);
+  } catch (error) {
+    console.error('Failed to get interview:', error);
+    return null;
+  }
+}
+
+/**
+ * Joins an existing interview session
+ */
+export async function joinInterview(
+  request: JoinInterviewRequest
+): Promise<{ interview: Interview; participant: Participant }> {
+  const response = await fetch(`${API_BASE_URL}/interviews/${request.interviewId}/join`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      participantName: request.participantName,
+      role: request.role,
+    }),
+  });
+
+  return handleResponse<{ interview: Interview; participant: Participant }>(response);
+}
+
+/**
+ * Updates code in an interview (real-time sync)
+ */
+export async function updateCode(request: UpdateCodeRequest): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/interviews/${request.interviewId}/code`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      code: request.code,
+      participantId: request.participantId,
+    }),
+  });
+
+  await handleResponse<void>(response);
+}
+
+/**
+ * Executes code on the backend
+ */
+export async function executeCode(
+  request: ExecuteCodeRequest
+): Promise<ExecuteCodeResponse> {
+  const response = await fetch(`${API_BASE_URL}/interviews/${request.interviewId}/execute`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      code: request.code,
+      language: request.language,
+      participantId: request.participantId,
+    }),
+  });
+
+  return handleResponse<ExecuteCodeResponse>(response);
+}
+
+/**
+ * Updates participant cursor position
+ */
+export async function updateCursorPosition(
+  interviewId: string,
+  participantId: string,
+  position: { line: number; column: number }
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/interviews/${interviewId}/participants/${participantId}/cursor`,
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(position),
+    }
+  );
+
+  await handleResponse<void>(response);
+}
+
+/**
+ * Leaves an interview session
+ */
+export async function leaveInterview(
+  interviewId: string,
+  participantId: string
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/interviews/${interviewId}/participants/${participantId}/leave`,
+    {
+      method: 'POST',
+    }
+  );
+
+  await handleResponse<void>(response);
+}
+
+/**
+ * Gets default code template for a language
+ */
+export function getDefaultCodeTemplate(language: ProgrammingLanguage): string {
+  return defaultCodeTemplates[language];
+}
 
 // Default code templates for each language
 const defaultCodeTemplates: Record<ProgrammingLanguage, string> = {
@@ -123,256 +263,30 @@ fn main() {
 `,
 };
 
-// Participant colors for cursor display
-const participantColors = [
-  '#22d3ee', // cyan
-  '#4ade80', // green
-  '#f472b6', // pink
-  '#fb923c', // orange
-  '#a78bfa', // purple
-  '#fbbf24', // yellow
-];
-
 /**
- * Creates a new interview session
- */
-export async function createInterview(
-  request: CreateInterviewRequest
-): Promise<Interview> {
-  await delay(300); // Simulate network delay
-
-  const interviewId = uuidv4();
-  const participantId = uuidv4();
-
-  const interview: Interview = {
-    id: interviewId,
-    title: request.title,
-    code: defaultCodeTemplates[request.language],
-    language: request.language,
-    participants: [
-      {
-        id: participantId,
-        name: request.creatorName,
-        role: 'interviewer',
-        isOnline: true,
-        color: participantColors[0],
-      },
-    ],
-    executions: [],
-    createdAt: new Date(),
-    shareableLink: `${window.location.origin}/interview/${interviewId}`,
-  };
-
-  mockInterviews.set(interviewId, interview);
-
-  return interview;
-}
-
-/**
- * Gets an interview by ID
- */
-export async function getInterview(interviewId: string): Promise<Interview | null> {
-  await delay(200);
-
-  return mockInterviews.get(interviewId) || null;
-}
-
-/**
- * Joins an existing interview session
- */
-export async function joinInterview(
-  request: JoinInterviewRequest
-): Promise<{ interview: Interview; participant: Participant }> {
-  await delay(300);
-
-  const interview = mockInterviews.get(request.interviewId);
-
-  if (!interview) {
-    throw new Error('Interview not found');
-  }
-
-  const participantId = uuidv4();
-  const colorIndex = interview.participants.length % participantColors.length;
-
-  const participant: Participant = {
-    id: participantId,
-    name: request.participantName,
-    role: request.role,
-    isOnline: true,
-    color: participantColors[colorIndex],
-  };
-
-  interview.participants.push(participant);
-
-  return { interview, participant };
-}
-
-/**
- * Updates code in an interview (real-time sync)
- */
-export async function updateCode(request: UpdateCodeRequest): Promise<void> {
-  // No delay for real-time updates
-  const interview = mockInterviews.get(request.interviewId);
-
-  if (interview) {
-    interview.code = request.code;
-  }
-}
-
-/**
- * Executes code safely in the browser
- */
-export async function executeCode(
-  request: ExecuteCodeRequest
-): Promise<ExecuteCodeResponse> {
-  await delay(500); // Simulate execution time
-
-  const startTime = performance.now();
-  let output = '';
-  let error: string | undefined;
-
-  try {
-    // Safe code execution using Function constructor for JavaScript
-    if (request.language === 'javascript' || request.language === 'typescript') {
-      // Capture console.log output
-      const logs: string[] = [];
-      const mockConsole = {
-        log: (...args: unknown[]) => {
-          logs.push(args.map(arg => 
-            typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-          ).join(' '));
-        },
-        error: (...args: unknown[]) => {
-          logs.push(`Error: ${args.join(' ')}`);
-        },
-        warn: (...args: unknown[]) => {
-          logs.push(`Warning: ${args.join(' ')}`);
-        },
-      };
-
-      try {
-        // Create a sandboxed function
-        const sandboxedCode = `
-          (function(console) {
-            ${request.code}
-          })
-        `;
-
-        const fn = new Function('return ' + sandboxedCode)();
-        fn(mockConsole);
-
-        output = logs.join('\n') || 'Code executed successfully (no output)';
-      } catch (execError) {
-        // Catch errors thrown during code execution
-        error = execError instanceof Error ? execError.message : 'Unknown error occurred';
-        output = '';
-      }
-    } else {
-      // For other languages, return a mock response
-      output = `[Mock Execution - ${request.language}]\n\nCode would be executed on server.\nOutput would appear here.\n\nNote: Only JavaScript/TypeScript can be executed in browser.`;
-    }
-  } catch (outerError) {
-    // Catch errors during function creation
-    console.error('ExecuteCode Error:', outerError);
-    error = outerError instanceof Error ? outerError.message : 'Unknown error occurred';
-    output = '';
-  }
-
-  const executionTime = performance.now() - startTime;
-
-  // Store execution in interview (always store, even on error)
-  const interview = mockInterviews.get(request.interviewId);
-  if (interview) {
-    interview.executions.push({
-      id: uuidv4(),
-      code: request.code,
-      language: request.language,
-      output: error ? '' : output,
-      executedAt: new Date(),
-      executedBy: request.participantId,
-    });
-  }
-
-  return {
-    output,
-    error,
-    executionTime,
-  };
-}
-
-/**
- * Updates participant cursor position
- */
-export async function updateCursorPosition(
-  interviewId: string,
-  participantId: string,
-  position: { line: number; column: number }
-): Promise<void> {
-  const interview = mockInterviews.get(interviewId);
-
-  if (interview) {
-    const participant = interview.participants.find(p => p.id === participantId);
-    if (participant) {
-      participant.cursorPosition = position;
-    }
-  }
-}
-
-/**
- * Leaves an interview session
- */
-export async function leaveInterview(
-  interviewId: string,
-  participantId: string
-): Promise<void> {
-  await delay(100);
-
-  const interview = mockInterviews.get(interviewId);
-
-  if (interview) {
-    const participant = interview.participants.find(p => p.id === participantId);
-    if (participant) {
-      participant.isOnline = false;
-    }
-  }
-}
-
-/**
- * Gets default code template for a language
- */
-export function getDefaultCodeTemplate(language: ProgrammingLanguage): string {
-  return defaultCodeTemplates[language];
-}
-
-/**
- * Subscribes to real-time updates (mocked with polling)
+ * Subscribes to real-time updates via WebSocket
+ * TODO: Implement WebSocket connection to backend
  */
 export function subscribeToInterview(
   interviewId: string,
+  participantId: string,
   callbacks: {
-    onCodeChange?: (code: string) => void;
-    onParticipantChange?: (participants: Participant[]) => void;
+    onCodeChange?: (code: string, updatedBy: string) => void;
+    onParticipantJoined?: (participant: Participant) => void;
+    onParticipantLeft?: (participantId: string) => void;
+    onCursorMoved?: (participantId: string, position: { line: number; column: number }) => void;
+    onExecutionCompleted?: (execution: any) => void;
   }
 ): () => void {
-  let lastCode = '';
-  let lastParticipantCount = 0;
-
-  const interval = setInterval(() => {
-    const interview = mockInterviews.get(interviewId);
-
-    if (interview) {
-      if (interview.code !== lastCode && callbacks.onCodeChange) {
-        lastCode = interview.code;
-        callbacks.onCodeChange(interview.code);
-      }
-
-      if (interview.participants.length !== lastParticipantCount && callbacks.onParticipantChange) {
-        lastParticipantCount = interview.participants.length;
-        callbacks.onParticipantChange([...interview.participants]);
-      }
-    }
-  }, 500);
-
+  // For now, use polling as a fallback
+  // This should be replaced with WebSocket connection
+  const WS_URL = import.meta.env.VITE_WS_URL || `ws://localhost:8000/ws/interviews/${interviewId}?participantId=${participantId}`;
+  
+  // Placeholder - WebSocket implementation would go here
+  console.log('WebSocket URL:', WS_URL);
+  
   // Return unsubscribe function
-  return () => clearInterval(interval);
+  return () => {
+    console.log('Unsubscribing from interview updates');
+  };
 }
