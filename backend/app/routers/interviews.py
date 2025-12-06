@@ -45,11 +45,13 @@ async def create_interview(request: CreateInterviewRequest) -> Interview:
         code="",  # Start with empty code
         participants=[creator],
         executions=[],
-        shareable_link=f"http://localhost:8000/interview/{str(UUID)}",  # Placeholder
+        shareable_link="",  # Will be set below
     )
     
-    # Update shareable link with actual ID
-    interview.shareable_link = f"http://localhost:8000/interview/{interview.id}"
+    # Update shareable link with actual ID (point to frontend)
+    # In production, this should come from environment variable
+    frontend_url = "http://localhost:8080"  # Vite dev server port
+    interview.shareable_link = f"{frontend_url}/interview/{interview.id}"
     
     # Save to database
     created_interview = db.create_interview(interview)
