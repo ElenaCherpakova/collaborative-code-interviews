@@ -1,0 +1,651 @@
+openapi: 3.0.3
+info:
+  title: Collaborative Code Interview API
+  description: |
+    Backend API for a real-time collaborative coding interview platform.
+    Supports multiple programming languages, real-time code collaboration,
+    code execution, and participant management.
+  version: 1.0.0
+  contact:
+    name: API Support
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+  - url: https://api.example.com/v1
+    description: Production server
+
+tags:
+  - name: Interviews
+    description: Interview session management
+  - name: Participants
+    description: Participant management and presence
+  - name: Code
+    description: Code editing and execution
+  - name: WebSocket
+    description: Real-time updates via WebSocket
+
+paths:
+  /interviews:
+    post:
+      tags:
+        - Interviews
+      summary: Create a new interview session
+      description: Creates a new collaborative coding interview session with the creator as the first participant
+      operationId: createInterview
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInterviewRequest'
+            example:
+              title: "Senior Backend Engineer Interview"
+              language: "python"
+              creatorName: "John Doe"
+      responses:
+        '201':
+          description: Interview created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Interview'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /interviews/{interviewId}:
+    get:
+      tags:
+        - Interviews
+      summary: Get interview by ID
+      description: Retrieves an existing interview session with all participants and code
+      operationId: getInterview
+      parameters:
+        - $ref: '#/components/parameters/InterviewId'
+      responses:
+        '200':
+          description: Interview found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Interview'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /interviews/{interviewId}/join:
+    post:
+      tags:
+        - Participants
+      summary: Join an existing interview
+      description: Adds a new participant to an existing interview session
+      operationId: joinInterview
+      parameters:
+        - $ref: '#/components/parameters/InterviewId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinInterviewRequest'
+            example:
+              participantName: "Jane Smith"
+              role: "candidate"
+      responses:
+        '200':
+          description: Successfully joined interview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoinInterviewResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /interviews/{interviewId}/code:
+    put:
+      tags:
+        - Code
+      summary: Update code in interview
+      description: Updates the code content in real-time. Should be called frequently during collaborative editing.
+      operationId: updateCode
+      parameters:
+        - $ref: '#/components/parameters/InterviewId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCodeRequest'
+            example:
+              code: "def fibonacci(n):\n    if n <= 1:\n        return n\n    return fibonacci(n-1) + fibonacci(n-2)"
+              participantId: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '204':
+          description: Code updated successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /interviews/{interviewId}/execute:
+    post:
+      tags:
+        - Code
+      summary: Execute code
+      description: |
+        Executes the provided code in a sandboxed environment and returns the output.
+        Supports multiple programming languages. Execution is limited to prevent abuse.
+      operationId: executeCode
+      parameters:
+        - $ref: '#/components/parameters/InterviewId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecuteCodeRequest'
+            example:
+              code: "print('Hello, World!')"
+              language: "python"
+              participantId: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Code executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecuteCodeResponse'
+              examples:
+                success:
+                  value:
+                    output: "Hello, World!\n"
+                    executionTime: 125
+                error:
+                  value:
+                    output: ""
+                    error: "NameError: name 'undefined_var' is not defined"
+                    executionTime: 45
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /interviews/{interviewId}/participants/{participantId}/cursor:
+    put:
+      tags:
+        - Participants
+      summary: Update participant cursor position
+      description: Updates the cursor position for real-time cursor tracking
+      operationId: updateCursorPosition
+      parameters:
+        - $ref: '#/components/parameters/InterviewId'
+        - $ref: '#/components/parameters/ParticipantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CursorPosition'
+            example:
+              line: 15
+              column: 23
+      responses:
+        '204':
+          description: Cursor position updated
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /interviews/{interviewId}/participants/{participantId}/leave:
+    post:
+      tags:
+        - Participants
+      summary: Leave interview
+      description: Marks a participant as offline/left the interview
+      operationId: leaveInterview
+      parameters:
+        - $ref: '#/components/parameters/InterviewId'
+        - $ref: '#/components/parameters/ParticipantId'
+      responses:
+        '204':
+          description: Successfully left interview
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /ws/interviews/{interviewId}:
+    get:
+      tags:
+        - WebSocket
+      summary: WebSocket connection for real-time updates
+      description: |
+        Establishes a WebSocket connection for real-time updates including:
+        - Code changes from other participants
+        - Participant join/leave events
+        - Cursor position updates
+        - Code execution results
+      parameters:
+        - $ref: '#/components/parameters/InterviewId'
+        - name: participantId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID of the participant connecting
+      responses:
+        '101':
+          description: WebSocket connection established
+        '400':
+          description: Bad request (invalid parameters)
+        '404':
+          description: Interview not found
+
+components:
+  parameters:
+    InterviewId:
+      name: interviewId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Unique identifier of the interview session
+      example: "550e8400-e29b-41d4-a716-446655440000"
+
+    ParticipantId:
+      name: participantId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Unique identifier of the participant
+      example: "660e8400-e29b-41d4-a716-446655440001"
+
+  schemas:
+    ProgrammingLanguage:
+      type: string
+      enum:
+        - javascript
+        - typescript
+        - python
+        - java
+        - cpp
+        - go
+        - rust
+      description: Supported programming languages
+
+    ParticipantRole:
+      type: string
+      enum:
+        - interviewer
+        - candidate
+      description: Role of the participant in the interview
+
+    Participant:
+      type: object
+      required:
+        - id
+        - name
+        - role
+        - isOnline
+        - color
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the participant
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Display name of the participant
+        role:
+          $ref: '#/components/schemas/ParticipantRole'
+        isOnline:
+          type: boolean
+          description: Whether the participant is currently connected
+        cursorPosition:
+          $ref: '#/components/schemas/CursorPosition'
+        color:
+          type: string
+          pattern: '^#[0-9a-fA-F]{6}$'
+          description: Hex color code for participant's cursor/avatar
+          example: "#22d3ee"
+
+    CursorPosition:
+      type: object
+      required:
+        - line
+        - column
+      properties:
+        line:
+          type: integer
+          minimum: 0
+          description: Line number (0-indexed)
+        column:
+          type: integer
+          minimum: 0
+          description: Column number (0-indexed)
+
+    CodeExecution:
+      type: object
+      required:
+        - id
+        - code
+        - language
+        - output
+        - executedAt
+        - executedBy
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for this execution
+        code:
+          type: string
+          description: The code that was executed
+        language:
+          $ref: '#/components/schemas/ProgrammingLanguage'
+        output:
+          type: string
+          description: Standard output from code execution
+        error:
+          type: string
+          description: Error message if execution failed
+        executedAt:
+          type: string
+          format: date-time
+          description: Timestamp when code was executed
+        executedBy:
+          type: string
+          format: uuid
+          description: ID of participant who executed the code
+
+    Interview:
+      type: object
+      required:
+        - id
+        - title
+        - code
+        - language
+        - participants
+        - executions
+        - createdAt
+        - shareableLink
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the interview
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Title of the interview session
+        code:
+          type: string
+          description: Current code content
+        language:
+          $ref: '#/components/schemas/ProgrammingLanguage'
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/Participant'
+          description: List of all participants in the interview
+        executions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CodeExecution'
+          description: History of code executions
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when interview was created
+        shareableLink:
+          type: string
+          format: uri
+          description: Shareable link to join the interview
+          example: "https://example.com/interview/550e8400-e29b-41d4-a716-446655440000"
+
+    CreateInterviewRequest:
+      type: object
+      required:
+        - title
+        - language
+        - creatorName
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Title for the interview session
+          example: "Senior Backend Engineer Interview"
+        language:
+          $ref: '#/components/schemas/ProgrammingLanguage'
+        creatorName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Name of the person creating the interview
+          example: "John Doe"
+
+    JoinInterviewRequest:
+      type: object
+      required:
+        - participantName
+        - role
+      properties:
+        participantName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Name of the person joining
+          example: "Jane Smith"
+        role:
+          $ref: '#/components/schemas/ParticipantRole'
+
+    JoinInterviewResponse:
+      type: object
+      required:
+        - interview
+        - participant
+      properties:
+        interview:
+          $ref: '#/components/schemas/Interview'
+        participant:
+          $ref: '#/components/schemas/Participant'
+          description: The newly created participant object
+
+    UpdateCodeRequest:
+      type: object
+      required:
+        - code
+        - participantId
+      properties:
+        code:
+          type: string
+          description: Updated code content
+        participantId:
+          type: string
+          format: uuid
+          description: ID of participant making the update
+
+    ExecuteCodeRequest:
+      type: object
+      required:
+        - code
+        - language
+        - participantId
+      properties:
+        code:
+          type: string
+          description: Code to execute
+        language:
+          $ref: '#/components/schemas/ProgrammingLanguage'
+        participantId:
+          type: string
+          format: uuid
+          description: ID of participant executing the code
+
+    ExecuteCodeResponse:
+      type: object
+      required:
+        - output
+        - executionTime
+      properties:
+        output:
+          type: string
+          description: Standard output from execution
+        error:
+          type: string
+          description: Error message if execution failed
+        executionTime:
+          type: number
+          format: float
+          description: Execution time in milliseconds
+          example: 125.5
+
+    Error:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: Error message
+        code:
+          type: string
+          description: Error code for programmatic handling
+        details:
+          type: object
+          description: Additional error details
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid input
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: "Invalid request parameters"
+            code: "INVALID_INPUT"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: "Interview not found"
+            code: "NOT_FOUND"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: "An unexpected error occurred"
+            code: "INTERNAL_ERROR"
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Optional JWT authentication for future use
+
+# WebSocket Events Documentation
+x-websocket-events:
+  client-to-server:
+    - event: code_update
+      description: Client sends code updates
+      payload:
+        type: object
+        properties:
+          code:
+            type: string
+          participantId:
+            type: string
+            format: uuid
+
+    - event: cursor_update
+      description: Client sends cursor position updates
+      payload:
+        type: object
+        properties:
+          line:
+            type: integer
+          column:
+            type: integer
+          participantId:
+            type: string
+            format: uuid
+
+  server-to-client:
+    - event: code_changed
+      description: Server broadcasts code changes to all participants
+      payload:
+        type: object
+        properties:
+          code:
+            type: string
+          updatedBy:
+            type: string
+            format: uuid
+
+    - event: participant_joined
+      description: Server notifies when a new participant joins
+      payload:
+        $ref: '#/components/schemas/Participant'
+
+    - event: participant_left
+      description: Server notifies when a participant leaves
+      payload:
+        type: object
+        properties:
+          participantId:
+            type: string
+            format: uuid
+
+    - event: cursor_moved
+      description: Server broadcasts cursor position changes
+      payload:
+        type: object
+        properties:
+          participantId:
+            type: string
+            format: uuid
+          position:
+            $ref: '#/components/schemas/CursorPosition'
+
+    - event: execution_completed
+      description: Server broadcasts code execution results
+      payload:
+        $ref: '#/components/schemas/CodeExecution'

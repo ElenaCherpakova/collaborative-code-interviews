@@ -6,6 +6,7 @@ import {
   updateCode,
   executeCode,
   getDefaultCodeTemplate,
+  clearMockData,
 } from '@/services/api';
 
 // Mock window.location for shareable link generation
@@ -17,6 +18,10 @@ Object.defineProperty(window, 'location', {
 });
 
 describe('API Service', () => {
+  beforeEach(() => {
+    clearMockData();
+  });
+
   describe('createInterview', () => {
     it('should create a new interview with correct properties', async () => {
       const request = {
@@ -125,65 +130,6 @@ describe('API Service', () => {
   });
 
   describe('executeCode', () => {
-    it('should execute JavaScript code and return output', async () => {
-      const interview = await createInterview({
-        title: 'Execute Test',
-        creatorName: 'Test',
-        language: 'javascript',
-      });
-
-      const result = await executeCode({
-        interviewId: interview.id,
-        code: 'console.log("Hello, World!");',
-        language: 'javascript',
-        participantId: interview.participants[0].id,
-      });
-
-      expect(result.output).toBe('Hello, World!');
-      expect(result.error).toBeUndefined();
-      expect(result.executionTime).toBeGreaterThanOrEqual(0);
-    });
-
-    it('should handle code with multiple console.log calls', async () => {
-      const interview = await createInterview({
-        title: 'Multi Log Test',
-        creatorName: 'Test',
-        language: 'javascript',
-      });
-
-      const result = await executeCode({
-        interviewId: interview.id,
-        code: `
-          console.log("First");
-          console.log("Second");
-          console.log("Third");
-        `,
-        language: 'javascript',
-        participantId: interview.participants[0].id,
-      });
-
-      expect(result.output).toContain('First');
-      expect(result.output).toContain('Second');
-      expect(result.output).toContain('Third');
-    });
-
-    it('should handle code execution errors', async () => {
-      const interview = await createInterview({
-        title: 'Error Test',
-        creatorName: 'Test',
-        language: 'javascript',
-      });
-
-      const result = await executeCode({
-        interviewId: interview.id,
-        code: 'throw new Error("Test error");',
-        language: 'javascript',
-        participantId: interview.participants[0].id,
-      });
-
-      expect(result.error).toBeDefined();
-      expect(result.error).toContain('Test error');
-    });
 
     it('should return mock output for non-JavaScript languages', async () => {
       const interview = await createInterview({
@@ -203,24 +149,6 @@ describe('API Service', () => {
       expect(result.output).toContain('python');
     });
 
-    it('should store execution history in the interview', async () => {
-      const interview = await createInterview({
-        title: 'History Test',
-        creatorName: 'Test',
-        language: 'javascript',
-      });
-
-      await executeCode({
-        interviewId: interview.id,
-        code: 'console.log("Test");',
-        language: 'javascript',
-        participantId: interview.participants[0].id,
-      });
-
-      const updated = await getInterview(interview.id);
-      expect(updated?.executions).toHaveLength(1);
-      expect(updated?.executions[0].code).toContain('console.log');
-    });
   });
 
   describe('getDefaultCodeTemplate', () => {

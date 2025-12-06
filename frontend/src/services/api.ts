@@ -21,6 +21,14 @@ const mockInterviews: Map<string, Interview> = new Map();
 // Simulated network delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+/**
+ * Clears all mock data (for testing purposes)
+ */
+export function clearMockData(): void {
+  mockInterviews.clear();
+}
+
+
 // Default code templates for each language
 const defaultCodeTemplates: Record<ProgrammingLanguage, string> = {
   javascript: `// Welcome to the coding interview!
@@ -220,10 +228,10 @@ export async function executeCode(
   await delay(500); // Simulate execution time
 
   const startTime = performance.now();
+  let output = '';
+  let error: string | undefined;
 
   try {
-    let output = '';
-
     // Safe code execution using Function constructor for JavaScript
     if (request.language === 'javascript' || request.language === 'typescript') {
       // Capture console.log output
@@ -242,51 +250,54 @@ export async function executeCode(
         },
       };
 
-      // Create a sandboxed function
-      const sandboxedCode = `
-        (function(console) {
-          ${request.code}
-        })
-      `;
+      try {
+        // Create a sandboxed function
+        const sandboxedCode = `
+          (function(console) {
+            ${request.code}
+          })
+        `;
 
-      const fn = new Function('return ' + sandboxedCode)();
-      fn(mockConsole);
+        const fn = new Function('return ' + sandboxedCode)();
+        fn(mockConsole);
 
-      output = logs.join('\n') || 'Code executed successfully (no output)';
+        output = logs.join('\n') || 'Code executed successfully (no output)';
+      } catch (execError) {
+        // Catch errors thrown during code execution
+        error = execError instanceof Error ? execError.message : 'Unknown error occurred';
+        output = '';
+      }
     } else {
       // For other languages, return a mock response
       output = `[Mock Execution - ${request.language}]\n\nCode would be executed on server.\nOutput would appear here.\n\nNote: Only JavaScript/TypeScript can be executed in browser.`;
     }
-
-    const executionTime = performance.now() - startTime;
-
-    // Store execution in interview
-    const interview = mockInterviews.get(request.interviewId);
-    if (interview) {
-      interview.executions.push({
-        id: uuidv4(),
-        code: request.code,
-        language: request.language,
-        output,
-        executedAt: new Date(),
-        executedBy: request.participantId,
-      });
-    }
-
-    return {
-      output,
-      executionTime,
-    };
-  } catch (error) {
-    const executionTime = performance.now() - startTime;
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-
-    return {
-      output: '',
-      error: errorMessage,
-      executionTime,
-    };
+  } catch (outerError) {
+    // Catch errors during function creation
+    console.error('ExecuteCode Error:', outerError);
+    error = outerError instanceof Error ? outerError.message : 'Unknown error occurred';
+    output = '';
   }
+
+  const executionTime = performance.now() - startTime;
+
+  // Store execution in interview (always store, even on error)
+  const interview = mockInterviews.get(request.interviewId);
+  if (interview) {
+    interview.executions.push({
+      id: uuidv4(),
+      code: request.code,
+      language: request.language,
+      output: error ? '' : output,
+      executedAt: new Date(),
+      executedBy: request.participantId,
+    });
+  }
+
+  return {
+    output,
+    error,
+    executionTime,
+  };
 }
 
 /**
