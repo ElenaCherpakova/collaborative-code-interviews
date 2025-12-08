@@ -4,6 +4,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import interviews, participants, code, websocket
 from app.database import init_db
+import os
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 
 
@@ -48,6 +51,7 @@ async def root():
         "message": "Collaborative Code Interview API",
         "version": "1.0.0",
         "docs": "/docs",
+        "deploy_mode": "unified" if os.path.exists(STATIC_DIR) else "api_only"
     }
 
 
@@ -55,4 +59,21 @@ async def root():
 async def health():
     """Health check endpoint."""
     return {"status": "healthy"}
+
+
+# Mount static files if directory exists (for production/docker)
+STATIC_DIR = "/app/static"
+if os.path.exists(STATIC_DIR):
+    # Mount assets (JS/CSS/images)
+    app.mount("/assets", StaticFiles(directory=f"{STATIC_DIR}/assets"), name="assets")
+    
+    # Catch-all route for SPA - must be last
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        # Allow API routes to pass through (though they should be matched above)
+        if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("openapi.json"):
+             return {"error": "Not Found", "path": full_path}
+             
+        # Serve index.html for all other routes
+        return FileResponse(f"{STATIC_DIR}/index.html")
 
