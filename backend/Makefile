@@ -6,7 +6,9 @@ help:
 	@echo "  make dev          - Run development server with auto-reload"
 	@echo "  make test         - Run all tests"
 	@echo "  make test-verbose - Run tests with verbose output"
+	@echo "  make test-integration - Run integration tests"
 	@echo "  make seed         - Seed database with sample data"
+
 	@echo "  make db-init      - Initialize database (create tables)"
 	@echo "  make db-reset     - Reset database (drop and recreate tables)"
 	@echo "  make db-clean     - Remove SQLite database file"
@@ -26,6 +28,10 @@ test:
 
 test-verbose:
 	uv run pytest tests/ -v
+
+test-integration:
+	uv run pytest tests_integration/ -v
+
 
 test-coverage:
 	uv run pytest tests/ --cov=app --cov-report=term-missing
