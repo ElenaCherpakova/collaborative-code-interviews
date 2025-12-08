@@ -1,4 +1,4 @@
-.PHONY: help install dev test test-verbose clean seed lint format
+.PHONY: help install dev test test-verbose clean seed lint format db-init db-reset db-clean
 
 help:
 	@echo "Available commands:"
@@ -7,9 +7,13 @@ help:
 	@echo "  make test         - Run all tests"
 	@echo "  make test-verbose - Run tests with verbose output"
 	@echo "  make seed         - Seed database with sample data"
+	@echo "  make db-init      - Initialize database (create tables)"
+	@echo "  make db-reset     - Reset database (drop and recreate tables)"
+	@echo "  make db-clean     - Remove SQLite database file"
 	@echo "  make clean        - Remove cache and temporary files"
 	@echo "  make lint         - Run linting checks"
 	@echo "  make format       - Format code"
+
 
 install:
 	uv sync
@@ -40,3 +44,18 @@ lint:
 
 format:
 	uv run ruff format app/ tests/
+
+db-init:
+	@echo "Initializing database..."
+	uv run python -c "from app.database import init_db; init_db(); print('Database initialized successfully')"
+
+db-reset:
+	@echo "Resetting database..."
+	rm -f interviews.db
+	uv run python -c "from app.database import init_db; init_db(); print('Database reset successfully')"
+
+db-clean:
+	@echo "Cleaning database..."
+	rm -f interviews.db
+	@echo "Database file removed"
+

@@ -3,6 +3,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import interviews, participants, code, websocket
+from app.database import init_db
+
 
 
 # Create FastAPI application
@@ -33,6 +35,12 @@ app.include_router(code.router, prefix="/api/v1")
 app.include_router(websocket.router)
 
 
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database on startup."""
+    init_db()
+
+
 @app.get("/")
 async def root():
     """Root endpoint."""
@@ -47,3 +55,4 @@ async def root():
 async def health():
     """Health check endpoint."""
     return {"status": "healthy"}
+

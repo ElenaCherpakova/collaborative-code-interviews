@@ -6,7 +6,6 @@ import {
   updateCode,
   executeCode,
   getDefaultCodeTemplate,
-  clearMockData,
 } from '@/services/api';
 
 // Mock window.location for shareable link generation
@@ -19,7 +18,8 @@ Object.defineProperty(window, 'location', {
 
 describe('API Service', () => {
   beforeEach(() => {
-    clearMockData();
+    // Mock fetch to avoid making real HTTP calls during tests
+    vi.clearAllMocks();
   });
 
   describe('createInterview', () => {
