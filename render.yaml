@@ -16,5 +16,4 @@ services:
 databases:
   - name: interviews-db
     databaseName: interviews
-    user: postgres
     plan: free # Can be upgraded later
